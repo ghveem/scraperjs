@@ -62,7 +62,7 @@ function exec(ScraperType) {
 	it('then', function(done) {
 		var s = new ScraperPromise(new ScraperType())
 			.get(HN_CLONE);
-		var temp = s.async(function(done) {
+		var temp = s.async(function(_, done) {
 			done();
 		});
 		s.done(function() {
@@ -71,22 +71,36 @@ function exec(ScraperType) {
 		assert.ok(temp === s);
 	});
 
-	it('onError', function(done) {
-		var s = new ScraperPromise(new ScraperType())
-			.get(HN_CLONE)
-			.then(function() {
-				throw new Error('random message');
-			});
-		var temp = s.onError(function(err) {
-			assert.equal(err.message, 'random message');
-			done();
-		});
-		assert.ok(s === temp);
-	});
+  describe('catch', function() {
+    it('on sync', function(done) {
+      var s = new ScraperPromise(new ScraperType())
+        .get(HN_CLONE)
+        .then(function() {
+          throw new Error('random message');
+        });
+      var temp = s.catch(function(err) {
+        assert.equal(err.message, 'random message');
+        done();
+      });
+      assert.ok(s === temp);
+    });
+    it('on async', function(done) {
+      var s = new ScraperPromise(new ScraperType())
+        .get(HN_CLONE)
+        .async(function(_, done) {
+          done(new Error('random message'));
+        });
+      var temp = s.catch(function(err) {
+        assert.equal(err.message, 'random message');
+        done();
+      });
+      assert.ok(s === temp);
+    });
+  });
 
 	// FIXME - this is not working for the dynamic scraper with factory
 	if (!isDynamic()) {
-		it('error without onError', function(done) {
+		it('error without catch', function(done) {
 			var d = domain.create();
 			d.on('error', function(err) {
 				assert.equal(err.message, 'random message');
@@ -112,20 +126,11 @@ function exec(ScraperType) {
 		it('without extra arguments', function(done) {
 			var s = new ScraperPromise(new ScraperType())
 				.get(HN_CLONE);
-			var fn;
-			if (isDynamic()) {
-				fn = function() {
+			var fn = function($) {
 					return $('.title a').map(function() {
 						return $(this).text();
 					}).get();
 				};
-			} else {
-				fn = function($) {
-					return $('.title a').map(function() {
-						return $(this).text();
-					}).get();
-				};
-			}
 			var temp = s.scrape(fn, function(news) {
 				assert.equal(news.length, expectedVal);
 				done();
@@ -136,20 +141,11 @@ function exec(ScraperType) {
 		it('without extra arguments', function(done) {
 			var s = new ScraperPromise(new ScraperType())
 				.get(HN_CLONE);
-			var fn;
-			if (isDynamic()) {
-				fn = function(selector) {
-					return $(selector).map(function() {
-						return $(this).text();
-					}).get();
-				};
-			} else {
-				fn = function($, selector) {
-					return $(selector).map(function() {
-						return $(this).text();
-					}).get();
-				};
-			}
+			var fn = function($, selector) {
+				return $(selector).map(function() {
+					return $(this).text();
+				}).get();
+			};
 			var temp = s.scrape(fn, function(news) {
 				assert.equal(news.length, expectedVal);
 				done();
@@ -160,23 +156,13 @@ function exec(ScraperType) {
 		it('with only the scraping function', function(done) {
 			var s = new ScraperPromise(new ScraperType())
 				.get(HN_CLONE);
-			var fn;
-			if (isDynamic()) {
-				fn = function() {
-					return $('.title a').map(function() {
-						return $(this).text();
-					}).get();
-				};
-			} else {
-				fn = function($) {
-					return $('.title a').map(function() {
-						return $(this).text();
-					}).get();
-				};
-			}
+			var fn = function($) {
+				return $('.title a').map(function() {
+					return $(this).text();
+				}).get();
+			};
 			var temp = s.scrape(fn);
-			temp.then(function(utils) {
-				var news = utils.lastReturn;
+			temp.then(function(news, utils) {
 				assert.equal(news.length, expectedVal);
 				done();
 			});
@@ -187,31 +173,18 @@ function exec(ScraperType) {
 			var s = new ScraperPromise(new ScraperType())
 				.get(HN_CLONE);
 			var temp;
-			if (isDynamic()) {
-				temp = s
-					.onError(function() {
-						assert.fail('Invalid call.');
-					})
-					.scrape(function() {
-						throw new Error('Error inside scraping fn.');
-					}, function(result) {
-						assert.ok(result === null);
-						done();
-					});
-			} else {
-				temp = s
-					.onError(function(err) {
-						assert.equal(err.message, 'Error inside scraping fn.');
-					})
-					.scrape(function() {
-						throw new Error('Error inside scraping fn.');
-					}, function() {
-						assert.fail('Invalid call.');
-					})
-					.done(function() {
-						done();
-					});
-			}
+			temp = s
+				.catch(function(err) {
+					assert.equal(err.message, 'Error inside scraping fn.');
+				})
+				.scrape(function() {
+					throw new Error('Error inside scraping fn.');
+				}, function() {
+					assert.fail('Invalid call.');
+				})
+				.done(function() {
+					done();
+				});
 			assert.ok(temp === s);
 		});
 	});
@@ -224,21 +197,13 @@ function exec(ScraperType) {
 			});
 		var temp = s.delay(100);
 		assert.ok(temp === s);
-		if (isDynamic()) {
-			s.scrape(function() {
-				return $('.dynamic').text();
-			}, function(result) {
-				assert.equal(result, 'Dynamic Content');
-				done();
-			});
-		} else {
-			s.scrape(function($) {
-				return $('.dynamic').length;
-			}, function(result) {
-				assert.equal(result, 0);
-				done();
-			});
-		}
+		var expectedContent = isDynamic()?'Dynamic Content':0;
+		s.scrape(function($) {
+			return $('.dynamic').text();
+		}, function(result) {
+			assert.equal(result, expectedContent);
+			done();
+		});
 	});
 
 	it('request', function(done) {
@@ -248,16 +213,9 @@ function exec(ScraperType) {
 			method: 'POST'
 		});
 		assert.ok(temp === s);
-		var fn;
-		if (isDynamic()) {
-			fn = function() {
-				return $('#POST_MESSAGE').text();
-			};
-		} else {
-			fn = function($) {
-				return $('#POST_MESSAGE').text();
-			};
-		}
+		var fn = function($) {
+			return $('#POST_MESSAGE').text();
+		};
 		s.scrape(fn, function(result) {
 			assert.equal(result, 'random text');
 			done();
@@ -294,7 +252,7 @@ function exec(ScraperType) {
 					assert.equal(c, 1);
 					done();
 				})
-				.onError(function(err) {
+				.catch(function(err) {
 					c++;
 					assert.equal(err.message, 'msg');
 				});
@@ -314,7 +272,7 @@ function exec(ScraperType) {
 
 	it('clone', function() {
 		var s = new ScraperPromise(new ScraperType())
-			.onError(function() {})
+			.catch(function() {})
 			.done(function() {})
 			.then(function() {})
 			.onStatusCode(200, function() {})
@@ -332,12 +290,12 @@ function exec(ScraperType) {
 
 	it('passing values between promises', function(done) {
 		new ScraperPromise(new ScraperType())
-			.done(function(utils) {
-				assert.deepEqual(utils.lastReturn, 5);
+			.done(function(result, utils) {
+				assert.deepEqual(result, 5);
 				done();
 			})
-			.then(function(utils) {
-				assert.deepEqual(utils.lastReturn, undefined);
+			.then(function(last, utils) {
+				assert.deepEqual(last, undefined);
 				return 1;
 			})
 			.onStatusCode(200, function(utils) {
@@ -367,7 +325,7 @@ function exec(ScraperType) {
 				.then(function() {
 					c++;
 				})
-				.then(function(utils) {
+				.then(function(last, utils) {
 					c++;
 					utils.stop();
 				})
@@ -382,7 +340,7 @@ function exec(ScraperType) {
 		it('scraper', function(done) {
 			var s = new ScraperPromise(new ScraperType());
 			s.get(HN_CLONE)
-				.done(function(utils) {
+				.done(function(_, utils) {
 					assert.ok(utils.scraper === s);
 					done();
 				});
@@ -390,7 +348,7 @@ function exec(ScraperType) {
 		it('params', function(done) {
 			var s = new ScraperPromise(new ScraperType());
 			s.get(HN_CLONE)
-				.done(function(utils) {
+				.done(function(_, utils) {
 					assert.ok(!utils.params);
 					done();
 				});

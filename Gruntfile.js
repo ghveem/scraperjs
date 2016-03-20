@@ -18,10 +18,10 @@ module.exports = function(grunt) {
 	grunt.initConfig({
 		exec: {
 			coverage: {
-				command: 'istanbul cover ./node_modules/mocha/bin/_mocha -- -t ' + MOCHA_TIMEOUT_MS + ' --root src/ test/'
+				command: 'istanbul cover ./node_modules/mocha/bin/_mocha -x src/PhantomWrapper.js -- -t ' + MOCHA_TIMEOUT_MS + ' --root src/ test/'
 			},
 			coveralls: {
-				command: 'istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -t ' + MOCHA_TIMEOUT_MS + ' --root src/ test/ && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js'
+				command: 'istanbul cover ./node_modules/mocha/bin/_mocha -x src/PhantomWrapper.js --report lcovonly -- -t ' + MOCHA_TIMEOUT_MS + ' -x src/PhantomWrapper.js --root src/ test/ && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js'
 			},
 			'check-coverage': {
 				command: 'istanbul check-coverage --lines ' + COVERAGE_THRESHOLD + ' --statements ' + COVERAGE_THRESHOLD + ' --functions ' + COVERAGE_THRESHOLD + ' --branches ' + COVERAGE_THRESHOLD + ' ./coverage/coverage.json'
@@ -66,8 +66,12 @@ module.exports = function(grunt) {
 				src: 'test/ScraperError.js',
 				options: MOCHA_OPTIONS
 			},
+			commandLine: {
+				src: 'test/commandLine.js',
+				options: MOCHA_OPTIONS
+			},
 			all: {
-				src: ['test/AbstractScraper.js', 'test/StaticScraper.js', 'test/DynamicScraper.js', 'test/ScraperPromise.js', 'test/Router.js', 'test/ScraperError.js'],
+				src: ['test/AbstractScraper.js', 'test/StaticScraper.js', 'test/DynamicScraper.js', 'test/ScraperPromise.js', 'test/Router.js', 'test/ScraperError.js', 'test/commandLine.js'],
 				options: MOCHA_OPTIONS
 			}
 		}

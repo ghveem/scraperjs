@@ -20,9 +20,14 @@ var program = require('commander'),
 
 program
 	.version(require('../package.json').version)
-	.usage('scraperjs url1 [urlN] [options]')
-	.option('--text <selector>', 'Scrapes the text from the selector.')
-	.option('--html <selector>', 'Scrapes the html from the selector.')
+	.usage(['url [url ...] --text --selector <selector> -s',
+		'url [url ...] --html --selector <selector> -s',
+		'url [url ...] --attr <attribute> --selector <selector> -s',
+		'url [url ...] --eval <functionBody> -s'].join('\n\t\t'))
+	.option('--selector <selector>', 'Selects an element')
+	.option('--text', 'Extracts the text from the selector element.')
+	.option('--html', 'Extracts the html from the selector element.')
+	.option('--attr <attribute>', 'Extracts an atribute of the selector element.')
 	.option('--eval <functionBody>', 'Uses a function to scrape, providing only it\'s body.')
 	.option('-s, --static', 'Uses the static scraper. Used by default.', true)
 	.option('-d, --dynamic', 'Uses the dynamic scraper.', false)
@@ -30,35 +35,52 @@ program
 
 var urls = program.args;
 var ScraperType = (program.dynamic ? 'Dynamic' : 'Static' ) + 'Scraper';
-var body, fn;
+var fn, args;
 
-if(program.text || program.html) {
-	body = "return $('"+(program.text || program.html)+"').map(function(){ return $(this)."+(program.html?"html":"text")+"(); }).get();";
+if(program.selector && (program.text || program.html || program.attr)) {
+	fn = function athScraper($, obj) {
+		return $(obj.selector).map(function(){
+			return obj.which?$(this)[obj.what](obj.which):$(this)[obj.what]();
+		}).get();
+	};
+	args = {
+		selector: program.selector,
+		what: undefined,
+		which: undefined
+	};
+
+	var temp;
+	if(program.attr) {
+		args.what = 'attr';
+		args.which = program.attr;
+	}else if(program.html) {
+		args.what = 'html';
+	}else if(program.text){
+		args.what = 'text';
+	}
 } else if (program.eval) {
-	body = program.eval;
+	fn = new Function("$", "obj", program.eval);
+	args = {};
 } else {
-	throw new Error('Use --text, --html or --eval');
+	console.error('Invalid usage. Run scraperjs --help for help');
+	return;
 }
 
-if(program.dynamic) {
-	fn = new Function(body);
-}else{
-	fn = new Function("$", body);
-}
-
-var scraper = sjs[ScraperType].create()
-	.scrape(fn, function(result) {
-		console.log(result);
-	});
+var scraper = sjs[ScraperType].create();
+scraper.scrape.apply(scraper, [fn, function(result) {
+	console.log(JSON.stringify(result));
+}, args]);
 async.eachSeries(urls, function(url, done) {
 	scraper
 		.get(url)
-		.onError(function(err) {
+		.catch(function(err) {
 			done(err);
 		})
 		.done(function() {
 			done();
 		});
 }, function(err) {
-	throw err;
+	if(err) {
+		console.error(err.stack);
+	}
 });
